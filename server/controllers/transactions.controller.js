@@ -1,0 +1,215 @@
+import mongoose from "mongoose";
+import User from "../models/user.model.js"; // adjust if path differs
+import moment from "moment"; // for date manipulation
+
+
+export const getTx = async (req, res) => {
+  try {
+    const { id } = req.params; // user ID from URL params
+    const { duration } = req.query; // 'w', 'm', or 'd'
+
+    // Validate input
+    if (!id || !['w', 'm', 'd'].includes(duration)) {
+      return res.status(400).json({ error: "Invalid user ID or duration" });
+    }
+
+    // Fetch user data
+    const user = await User.findById(id);
+    if (!user) return res.status(404).json({ error: "User not found" });
+
+    // Determine the start date based on the selected duration
+    const now = moment();
+    let start;
+
+    switch (duration) {
+      case 'w':
+        start = moment().startOf('week');
+        break;
+      case 'm':
+        start = moment().startOf('month');
+        break;
+      case 'd':
+        start = moment().startOf('day');
+        break;
+      default:
+        start = now;
+    }
+
+    // Filter transactions by the date range
+    const filteredTx = user.transactions.filter((tx) =>
+      moment(tx.date).isSameOrAfter(start)
+    );
+
+    // Group transactions by date and category
+    const groupedTx = {};
+
+    filteredTx.forEach((tx) => {
+      const txDate = moment(tx.date).format("YYYY-MM-DD");
+
+      // Initialize the date object if not already present
+      if (!groupedTx[txDate]) {
+        groupedTx[txDate] = {
+          date: txDate,
+          needs: [],
+          wants: [],
+        };
+      }
+
+      // Loop through needs and wants and classify them
+      tx.needs.forEach((item) => {
+        groupedTx[txDate].needs.push(item);
+      });
+
+      tx.wants.forEach((item) => {
+        groupedTx[txDate].wants.push(item);
+      });
+    });
+
+    // Convert to array and sort by date ascending
+    const sortedGroupedTx = Object.values(groupedTx).sort(
+      (a, b) => new Date(a.date) - new Date(b.date)
+    );
+
+    // Limit the results based on the duration
+    let limitedTx;
+    switch (duration) {
+      case 'w':
+        limitedTx = sortedGroupedTx.slice(0, 7); // Last 7 days of transactions
+        break;
+      case 'm':
+        limitedTx = sortedGroupedTx.slice(0, 30); // Last 30 days of transactions
+        break;
+      case 'd':
+        limitedTx = sortedGroupedTx.slice(0, 1); // Last 1 day of transactions
+        break;
+      default:
+        limitedTx = sortedGroupedTx;
+    }
+
+    // Send the filtered and grouped transactions as a response
+    res.status(200).json({
+      user: user.username,
+      range: duration,
+      totalDays: limitedTx.length,
+      transactions: limitedTx,
+    });
+
+  } catch (err) {
+    console.error("❌ Error fetching transactions:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+};
+
+
+
+export const getSpendingSummary = async (req, res) => {
+    const { userId } = req.params;
+    const { summary } = req.query; // expects "needs", "wants", or undefined
+
+    try {
+        const user = await User.findById(userId);
+        if (!user) return res.status(404).json({ message: "User not found" });
+
+        let totalNeeds = 0;
+        let totalWants = 0;
+
+        user.transactions.forEach(tx => {
+            tx.entries.needs.forEach(n => totalNeeds += n.amount);
+            tx.entries.wants.forEach(w => totalWants += w.amount);
+        });
+
+        if (summary === "needs") {
+            return res.status(200).json({ totalNeeds });
+        }
+
+        if (summary === "wants") {
+            return res.status(200).json({ totalWants });
+        }
+
+        // Return both by default
+        res.status(200).json({ totalNeeds, totalWants });
+
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+};
+
+export const postTransaction = async (req, res) => {
+    try {
+        const { userId } = req.params; 
+        const { date, type, category, amount, description } = req.body;
+
+        if (!userId || !date || !type || !category || !amount) {
+            return res.status(400).json({ message: "Missing required fields." });
+        }
+
+        const user = await User.findById(userId);
+        if (!user) return res.status(404).json({ message: "User not found" });
+
+        // Format the date to store transactions grouped by date
+        const formattedDate = new Date(date).toISOString().split("T")[0]; // "YYYY-MM-DD"
+
+        // Find if entry exists for the same date
+        let dayEntry = user.transactions.find(tx =>
+            new Date(tx.date).toISOString().split("T")[0] === formattedDate
+        );
+
+        if (!dayEntry) {
+            // Create a new entry for the date
+            dayEntry = {
+                date: new Date(date),
+                entries: {
+                    needs: [],
+                    wants: [],
+                }
+            };
+            user.transactions.push(dayEntry);
+        }
+
+        // Add transaction to either needs or wants
+        if (type === "need") {
+            dayEntry.entries.needs.push({ category, amount, description });
+        } else if (type === "want") {
+            dayEntry.entries.wants.push({ category, amount, description });
+        } else {
+            return res.status(400).json({ message: "Invalid type. Must be 'need' or 'want'." });
+        }
+
+        await user.save();
+        res.status(200).json({ message: "Transaction added successfully." });
+
+    } catch (err) {
+        console.error("❌ Error in postTransaction:", err);
+        res.status(500).json({ error: err.message });
+    }
+};
+
+export const getUserTransactions = async (req, res) => {
+  try {
+    const userId = req.params.userId;
+    
+    // Find the user and get their transactions
+    const user = await User.findById(userId);
+    
+    if (!user) {
+      return res.status(404).json({ 
+        success: false, 
+        message: 'User not found' 
+      });
+    }
+
+    // Return the transactions
+    res.status(200).json({
+      success: true,
+      transactions: user.transactions || []
+    });
+
+  } catch (error) {
+    console.error('Error fetching transactions:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching transactions'
+    });
+  }
+};
+
