@@ -100,11 +100,6 @@ Want to explore visuals, API documentation, smart contracts, or live demo?
 
 📩 Reach out or check the repo’s `/docs` folder (coming soon).
 
----
-
-## 🧪 Demo
-
-[Link](https://youtu.be/LKmpacW3xrE?si=8dq2NihrmMZIKoxu)
 
 ---
 
