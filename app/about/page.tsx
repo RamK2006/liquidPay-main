@@ -174,22 +174,22 @@ export default function AboutPage() {
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
             <TeamMember
-              name="Shreyas Srivastava"
+              name="Ram Kumar"
               role="Founder & CEO"
               image="/placeholder.svg?height=150&width=150"
             />
             <TeamMember
-              name="Srijit Das"
+              name="Suraj Kumar"
               role="CTO & AI Lead"
               image="/placeholder.svg?height=150&width=150"
             />
             <TeamMember
-              name="Shreysh Omkar Hegde"
+              name="Basant Bansal"
               role="Chief Product Officer"
               image="/placeholder.svg?height=150&width=150"
             />
             <TeamMember
-              name="Reddy"
+              name="Madan"
               role="Chief Marketing Officer"
               image="/placeholder.svg?height=150&width=150"
             />
